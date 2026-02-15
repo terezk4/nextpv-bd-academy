@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { Lock, CheckCircle, Clock, ArrowRight } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { EditableText } from '@/components/EditableText';
 
 type Props = {
   id: number;
@@ -57,7 +58,7 @@ export function SessionCard({ id, title, duration, isUnlocked, isComplete, quizS
         'font-semibold text-sm leading-snug mb-3',
         isUnlocked ? 'text-gray-900' : 'text-gray-500'
       )}>
-        {title}
+        <EditableText editKey={`session.${id}.title`} text={title} label={`Session ${id} title`} />
       </h3>
 
       <div className="flex items-center gap-4 text-xs text-gray-500">
@@ -74,7 +75,9 @@ export function SessionCard({ id, title, duration, isUnlocked, isComplete, quizS
           </span>
         )}
         {!isUnlocked && (
-          <span className="text-gray-400">Complete Session {id - 1} first</span>
+          <span className="text-gray-400">
+            <EditableText editKey={`session.${id}.lockedText`} text={`Complete Session ${id - 1} first`} label={`Session ${id} lock text`} />
+          </span>
         )}
       </div>
     </div>

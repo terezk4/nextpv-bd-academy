@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import Link from 'next/link';
 import { sessions } from '@/content/sessions';
 import { quizzes } from '@/content/quizzes';
 import { scenarios } from '@/content/scenarios';
@@ -14,6 +13,7 @@ import { ScenarioBlock } from '@/components/ScenarioBlock';
 import { FlashcardDeck } from '@/components/FlashcardDeck';
 import { ChecklistBlock } from '@/components/ChecklistBlock';
 import { DecisionTree } from '@/components/DecisionTree';
+import { EditableText } from '@/components/EditableText';
 import type { DecisionNode } from '@/lib/types';
 import { ArrowLeft, ArrowRight, Lock, Clock, CheckCircle, AlertTriangle, BookOpen } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -94,7 +94,7 @@ export function SessionPageClient({ sessionId }: Props) {
 
   const {
     progress, mounted, isSessionUnlocked, isSessionComplete,
-    setQuizScore, markScenarioViewed, toggleChecklistItem,
+    setQuizScore, clearQuizScore, markScenarioViewed, toggleChecklistItem,
     markFlashcardViewed, markSessionComplete, setLastVisited,
   } = useProgress();
 
@@ -113,11 +113,31 @@ export function SessionPageClient({ sessionId }: Props) {
     }
   }, [mounted, sessionId, progress, setLastVisited]);
 
+  const navigateTo = (path: string) => {
+    router.push(path);
+    if (typeof window !== 'undefined') {
+      window.setTimeout(() => {
+        const current = (window.location.pathname.replace(/\/+$/, '') || '/');
+        const target = (path.replace(/\/+$/, '') || '/');
+        if (current !== target) {
+          window.location.assign(path);
+        }
+      }, 300);
+    }
+  };
+  const goHome = () => navigateTo('/');
+
   if (!session) {
     return (
       <div className="text-center py-20">
         <p className="text-gray-500">Session not found.</p>
-        <Link href="/" className="text-blue-600 hover:underline mt-4 inline-block">← Back to home</Link>
+        <button
+          type="button"
+          onClick={goHome}
+          className="text-blue-600 hover:underline mt-4 inline-block"
+        >
+          Back to home
+        </button>
       </div>
     );
   }
@@ -128,7 +148,13 @@ export function SessionPageClient({ sessionId }: Props) {
         <Lock className="w-12 h-12 text-gray-300 mx-auto mb-4" />
         <h2 className="text-xl font-bold text-gray-700 mb-2">Session Locked</h2>
         <p className="text-gray-500 mb-6">Complete Session {sessionId - 1} and score ≥70% on the quiz to unlock this session.</p>
-        <Link href="/" className="text-blue-600 hover:underline">← Back to home</Link>
+        <button
+          type="button"
+          onClick={goHome}
+          className="text-blue-600 hover:underline"
+        >
+          Back to home
+        </button>
       </div>
     );
   }
@@ -136,6 +162,8 @@ export function SessionPageClient({ sessionId }: Props) {
   const quizScore = progress.quizScores[sessionId];
   const sessionComplete = mounted && isSessionComplete(sessionId);
   const passedQuiz = quizScore !== undefined && quizScore >= 70;
+  const goPrevious = () => navigateTo(`/session/${sessionId - 1}`);
+  const goNext = () => navigateTo(`/session/${sessionId + 1}`);
 
   function handleQuizComplete(score: number) {
     setQuizScore(sessionId, score);
@@ -150,25 +178,32 @@ export function SessionPageClient({ sessionId }: Props) {
     if (score !== undefined && score >= 70) setCanComplete(true);
   }
 
+  function handleQuizRetry() {
+    clearQuizScore(sessionId);
+    setQuizDone(false);
+    setCanComplete(false);
+  }
+
   function handleMarkComplete() {
     markSessionComplete(sessionId);
-    if (sessionId < 6) setTimeout(() => router.push('/'), 800);
+    if (sessionId < 6) {
+      goNext();
+      return;
+    }
+    goHome();
   }
 
   return (
     <div className="space-y-6">
       {/* Back nav */}
       <div className="flex items-center gap-3">
-        <a
-          href="/"
-          onClick={(e) => {
-            e.preventDefault();
-            window.location.assign('/');
-          }}
+        <button
+          type="button"
+          onClick={goHome}
           className="inline-flex items-center gap-1.5 rounded-md px-1.5 py-1 text-sm text-gray-500 hover:bg-slate-100 hover:text-blue-600 transition-colors cursor-pointer"
         >
           <ArrowLeft className="w-4 h-4" /> All Sessions
-        </a>
+        </button>
         <span className="text-gray-300">/</span>
         <span className="text-sm text-gray-900 font-medium">Session {sessionId}</span>
       </div>
@@ -185,11 +220,17 @@ export function SessionPageClient({ sessionId }: Props) {
                 </span>
               )}
             </div>
-            <h1 className="text-xl sm:text-2xl font-bold text-gray-900 mb-2">{session.title}</h1>
-            <p className="text-sm text-gray-600 mb-3">{session.objective}</p>
+            <h1 className="text-xl sm:text-2xl font-bold text-gray-900 mb-2">
+              <EditableText editKey={`session.${sessionId}.title`} text={session.title} label={`Session ${sessionId} title`} />
+            </h1>
+            <p className="text-sm text-gray-600 mb-3">
+              <EditableText editKey={`session.${sessionId}.objective`} text={session.objective} label={`Session ${sessionId} objective`} />
+            </p>
             <div className="flex items-center gap-4 text-xs text-gray-400">
               <span className="flex items-center gap-1"><Clock className="w-3.5 h-3.5" /> {session.duration} min</span>
-              <span>Prerequisite: {session.prerequisite}</span>
+              <span>
+                <EditableText editKey={`session.${sessionId}.prerequisite`} text={`Prerequisite: ${session.prerequisite}`} label={`Session ${sessionId} prerequisite`} />
+              </span>
             </div>
           </div>
           {mounted && quizScore !== undefined && (
@@ -229,20 +270,23 @@ export function SessionPageClient({ sessionId }: Props) {
       <div className="bg-white rounded-2xl border border-slate-200 p-6">
         <div className="flex items-center gap-2 mb-4">
           <AlertTriangle className="w-5 h-5 text-amber-500" />
-          <h2 className="text-lg font-bold text-gray-900">Common Mistakes</h2>
+          <h2 className="text-lg font-bold text-gray-900">
+            <EditableText editKey={`session.${sessionId}.mistakes.title`} text="Common Mistakes" label={`Session ${sessionId} mistakes title`} />
+          </h2>
         </div>
         <div className="space-y-3">
-          {session.mistakes.map((mistake, i) => {
-            const parts = mistake.split('**');
-            return (
-              <div key={i} className="flex gap-3 p-3 bg-amber-50 rounded-lg border border-amber-200">
-                <span className="text-amber-500 font-bold text-sm flex-shrink-0">#{i + 1}</span>
-                <p className="text-sm text-gray-700 leading-relaxed">
-                  {parts.map((part, j) => j % 2 === 1 ? <strong key={j} className="text-amber-800">{part}</strong> : part)}
-                </p>
-              </div>
-            );
-          })}
+          {session.mistakes.map((mistake, i) => (
+            <div key={i} className="flex gap-3 p-3 bg-amber-50 rounded-lg border border-amber-200">
+              <span className="text-amber-500 font-bold text-sm flex-shrink-0">#{i + 1}</span>
+              <p className="text-sm text-gray-700 leading-relaxed">
+                <EditableText
+                  editKey={`session.${sessionId}.mistake.${i}`}
+                  text={mistake}
+                  label={`Session ${sessionId} mistake ${i + 1}`}
+                />
+              </p>
+            </div>
+          ))}
         </div>
       </div>
 
@@ -262,7 +306,12 @@ export function SessionPageClient({ sessionId }: Props) {
       {/* Quiz */}
       {sessionQuizzes.length > 0 && (
         <div className="bg-white rounded-2xl border border-slate-200 p-6">
-          <QuizBlock questions={sessionQuizzes} sessionId={sessionId} onComplete={handleQuizComplete} />
+          <QuizBlock
+            questions={sessionQuizzes}
+            sessionId={sessionId}
+            onComplete={handleQuizComplete}
+            onRetry={handleQuizRetry}
+          />
         </div>
       )}
 
@@ -277,13 +326,19 @@ export function SessionPageClient({ sessionId }: Props) {
       <div className="bg-white rounded-2xl border border-slate-200 p-6">
         <div className="flex items-center gap-2 mb-4">
           <BookOpen className="w-5 h-5 text-blue-500" />
-          <h2 className="text-lg font-bold text-gray-900">Reference Documents</h2>
+          <h2 className="text-lg font-bold text-gray-900">
+            <EditableText editKey={`session.${sessionId}.resources.title`} text="Reference Documents" label={`Session ${sessionId} resources title`} />
+          </h2>
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           {session.resources.map((res, i) => (
             <div key={i} className="p-3 bg-blue-50 rounded-lg border border-blue-200">
-              <p className="text-sm font-semibold text-blue-800">{res.title}</p>
-              <p className="text-xs text-blue-600 mt-0.5">{res.description}</p>
+              <p className="text-sm font-semibold text-blue-800">
+                <EditableText editKey={`session.${sessionId}.resource.${i}.title`} text={res.title} label={`Session ${sessionId} resource ${i + 1} title`} />
+              </p>
+              <p className="text-xs text-blue-600 mt-0.5">
+                <EditableText editKey={`session.${sessionId}.resource.${i}.description`} text={res.description} label={`Session ${sessionId} resource ${i + 1} description`} />
+              </p>
             </div>
           ))}
         </div>
@@ -307,9 +362,13 @@ export function SessionPageClient({ sessionId }: Props) {
         </div>
         <div className="flex items-center gap-3">
           {sessionId > 1 && (
-            <Link href={`/session/${sessionId - 1}`} className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl border border-gray-200 text-gray-600 text-sm hover:bg-gray-50">
+            <button
+              type="button"
+              onClick={goPrevious}
+              className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl border border-gray-200 text-gray-600 text-sm hover:bg-gray-50"
+            >
               <ArrowLeft className="w-4 h-4" /> Previous
-            </Link>
+            </button>
           )}
           {!sessionComplete ? (
             <button
@@ -320,13 +379,21 @@ export function SessionPageClient({ sessionId }: Props) {
               {canComplete ? (sessionId < 6 ? `✓ Mark Complete + Unlock Session ${sessionId + 1}` : '✓ Mark Complete — Course Done!') : 'Complete quiz (≥70%) + scenario to finish'}
             </button>
           ) : sessionId < 6 ? (
-            <Link href={`/session/${sessionId + 1}`} className="flex-1 flex items-center justify-center gap-2 py-3 px-6 rounded-xl font-semibold text-sm bg-blue-600 text-white hover:bg-blue-700">
+            <button
+              type="button"
+              onClick={goNext}
+              className="flex-1 flex items-center justify-center gap-2 py-3 px-6 rounded-xl font-semibold text-sm bg-blue-600 text-white hover:bg-blue-700"
+            >
               Next Session <ArrowRight className="w-4 h-4" />
-            </Link>
+            </button>
           ) : (
-            <Link href="/" className="flex-1 flex items-center justify-center gap-2 py-3 px-6 rounded-xl font-semibold text-sm bg-blue-600 text-white hover:bg-blue-700">
-              ← Back to Overview
-            </Link>
+            <button
+              type="button"
+              onClick={goHome}
+              className="flex-1 flex items-center justify-center gap-2 py-3 px-6 rounded-xl font-semibold text-sm bg-blue-600 text-white hover:bg-blue-700"
+            >
+              Back to Overview
+            </button>
           )}
         </div>
       </div>

@@ -2,8 +2,9 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import type { CourseProgress } from '@/lib/types';
+import { useAuth } from '@/hooks/useAuth';
 
-const STORAGE_KEY = 'nextpv_bd_academy_progress';
+const STORAGE_KEY_PREFIX = 'nextpv_bd_academy_progress';
 
 const defaultProgress: CourseProgress = {
   completedSessions: [],
@@ -14,10 +15,10 @@ const defaultProgress: CourseProgress = {
   lastVisited: 1,
 };
 
-function loadProgress(): CourseProgress {
+function loadProgress(storageKey: string): CourseProgress {
   if (typeof window === 'undefined') return defaultProgress;
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
+    const raw = localStorage.getItem(storageKey);
     if (!raw) return defaultProgress;
     return { ...defaultProgress, ...JSON.parse(raw) };
   } catch {
@@ -25,37 +26,56 @@ function loadProgress(): CourseProgress {
   }
 }
 
-function saveProgress(progress: CourseProgress) {
+function saveProgress(storageKey: string, progress: CourseProgress) {
   if (typeof window === 'undefined') return;
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(progress));
+    localStorage.setItem(storageKey, JSON.stringify(progress));
   } catch {
     // ignore storage errors
   }
 }
 
 export function useProgress() {
+  const { user, mounted: authMounted } = useAuth();
   const [progress, setProgress] = useState<CourseProgress>(defaultProgress);
   const [mounted, setMounted] = useState(false);
+  const storageKey = user ? `${STORAGE_KEY_PREFIX}_${user.email}` : null;
 
   useEffect(() => {
-    setProgress(loadProgress());
+    if (!authMounted) return;
+    if (!storageKey) {
+      setProgress(defaultProgress);
+      setMounted(true);
+      return;
+    }
+    setProgress(loadProgress(storageKey));
     setMounted(true);
-  }, []);
+  }, [authMounted, storageKey]);
 
   const update = useCallback((updater: (prev: CourseProgress) => CourseProgress) => {
     setProgress(prev => {
       const next = updater(prev);
-      saveProgress(next);
+      if (storageKey) saveProgress(storageKey, next);
       return next;
     });
-  }, []);
+  }, [storageKey]);
 
   const setQuizScore = useCallback((sessionId: number, score: number) => {
     update(prev => ({
       ...prev,
       quizScores: { ...prev.quizScores, [sessionId]: score },
     }));
+  }, [update]);
+
+  const clearQuizScore = useCallback((sessionId: number) => {
+    update(prev => {
+      const nextScores = { ...prev.quizScores };
+      delete nextScores[sessionId];
+      return {
+        ...prev,
+        quizScores: nextScores,
+      };
+    });
   }, [update]);
 
   const markScenarioViewed = useCallback((sessionId: number) => {
@@ -96,11 +116,12 @@ export function useProgress() {
   }, [update]);
 
   const isSessionUnlocked = useCallback((sessionId: number): boolean => {
+    if (user?.isAdmin) return true;
     if (sessionId === 1) return true;
     const prevScore = progress.quizScores[sessionId - 1] ?? 0;
     const prevScenario = progress.scenariosViewed[sessionId - 1] ?? false;
     return prevScore >= 70 && prevScenario;
-  }, [progress]);
+  }, [progress, user]);
 
   const isSessionComplete = useCallback((sessionId: number): boolean => {
     return progress.completedSessions.includes(sessionId);
@@ -116,6 +137,7 @@ export function useProgress() {
     progress,
     mounted,
     setQuizScore,
+    clearQuizScore,
     markScenarioViewed,
     toggleChecklistItem,
     markFlashcardViewed,

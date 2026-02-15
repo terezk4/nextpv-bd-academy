@@ -3,12 +3,13 @@
 import type { ContentSection } from '@/lib/types';
 import { AlertTriangle, Info, Lightbulb } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { useAuth } from '@/hooks/useAuth';
+import { useContentEdits } from '@/hooks/useContentEdits';
+import { EditableText } from '@/components/EditableText';
 
 function renderMarkdown(text: string) {
-  // Simple markdown-like renderer for bold and newlines
   const lines = text.split('\n');
   return lines.map((line, i) => {
-    // Bold: **text**
     const parts = line.split(/(\*\*[^*]+\*\*)/g);
     const rendered = parts.map((part, j) => {
       if (part.startsWith('**') && part.endsWith('**')) {
@@ -17,7 +18,6 @@ function renderMarkdown(text: string) {
       return part;
     });
 
-    // List items
     if (line.startsWith('- ')) {
       return (
         <li key={i} className="ml-4 list-disc">
@@ -30,6 +30,7 @@ function renderMarkdown(text: string) {
         </li>
       );
     }
+
     if (line.match(/^\d+\. /)) {
       const match = line.match(/^(\d+)\. (.*)/);
       if (match) {
@@ -43,32 +44,50 @@ function renderMarkdown(text: string) {
       }
     }
 
-    // Emoji bullets (❌ ✅)
-    if (line.startsWith('❌') || line.startsWith('✅') || line.startsWith('⚠️') || line.startsWith('⚡')) {
+    if (line.startsWith('X ') || line.startsWith('OK ') || line.startsWith('! ') || line.startsWith('* ')) {
       return <p key={i} className="mt-1">{rendered}</p>;
     }
 
     if (line === '') return <div key={i} className="h-2" />;
-
     return <p key={i} className={i > 0 ? 'mt-1' : ''}>{rendered}</p>;
   });
 }
 
 export function ContentRenderer({ section }: { section: ContentSection }) {
+  const { user } = useAuth();
+  const { resolveText, editText } = useContentEdits();
+
+  const headingKey = `section.${section.id}.heading`;
+  const contentKey = `section.${section.id}.content`;
+  const headingText = section.heading ? resolveText(headingKey, section.heading) : undefined;
+  const contentText = resolveText(contentKey, section.content);
+
   if (section.type === 'table' && section.tableData) {
-    const { headers, rows } = section.tableData;
+    const headers = section.tableData.headers.map((header, i) => (
+      resolveText(`section.${section.id}.table.header.${i}`, header)
+    ));
+    const rows = section.tableData.rows.map((row, ri) => row.map((cell, ci) => (
+      resolveText(`section.${section.id}.table.row.${ri}.cell.${ci}`, cell)
+    )));
+
     return (
       <div className="my-6">
-        {section.heading && (
-          <h3 className="text-lg font-semibold text-gray-900 mb-3">{section.heading}</h3>
+        {headingText && (
+          <h3 className="text-lg font-semibold text-gray-900 mb-3">
+            <EditableText editKey={headingKey} text={headingText} label={`${section.id} heading`} />
+          </h3>
         )}
         <div className="overflow-x-auto rounded-xl border border-gray-200">
           <table className="min-w-full text-sm">
             <thead className="bg-gray-50 border-b border-gray-200">
               <tr>
-                {headers.map((h, i) => (
+                {headers.map((header, i) => (
                   <th key={i} className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wide">
-                    {h}
+                    <EditableText
+                      editKey={`section.${section.id}.table.header.${i}`}
+                      text={header}
+                      label={`${section.id} table header ${i + 1}`}
+                    />
                   </th>
                 ))}
               </tr>
@@ -78,7 +97,13 @@ export function ContentRenderer({ section }: { section: ContentSection }) {
                 <tr key={ri} className="hover:bg-gray-50">
                   {row.map((cell, ci) => (
                     <td key={ci} className="px-4 py-3 text-gray-700 align-top">
-                      <span className="italic text-gray-600">{cell}</span>
+                      <span className="italic text-gray-600">
+                        <EditableText
+                          editKey={`section.${section.id}.table.row.${ri}.cell.${ci}`}
+                          text={cell}
+                          label={`${section.id} table row ${ri + 1} cell ${ci + 1}`}
+                        />
+                      </span>
                     </td>
                   ))}
                 </tr>
@@ -105,23 +130,41 @@ export function ContentRenderer({ section }: { section: ContentSection }) {
     return (
       <div className={cn('my-4 p-4 rounded-xl border flex gap-3', styles[type])}>
         {icons[type]}
-        <div className="text-sm text-gray-800 leading-relaxed">
-          {section.heading && <strong className="block mb-1">{section.heading}</strong>}
-          <ul className="space-y-1">{renderMarkdown(section.content)}</ul>
+        <div
+          className={cn(
+            'text-sm text-gray-800 leading-relaxed',
+            user?.isAdmin && 'cursor-pointer rounded-md hover:bg-white/50'
+          )}
+          onClick={() => user?.isAdmin && editText(contentKey, contentText, `${section.id} callout content`)}
+        >
+          {headingText && (
+            <strong className="block mb-1">
+              <EditableText editKey={headingKey} text={headingText} label={`${section.id} heading`} />
+            </strong>
+          )}
+          <ul className="space-y-1">{renderMarkdown(contentText)}</ul>
         </div>
       </div>
     );
   }
 
-  // Default: text section
   return (
     <div className="my-6">
-      {section.heading && (
-        <h3 className="text-lg font-semibold text-gray-900 mb-3">{section.heading}</h3>
+      {headingText && (
+        <h3 className="text-lg font-semibold text-gray-900 mb-3">
+          <EditableText editKey={headingKey} text={headingText} label={`${section.id} heading`} />
+        </h3>
       )}
-      <div className="text-gray-700 leading-relaxed text-sm space-y-1">
-        {renderMarkdown(section.content)}
+      <div
+        className={cn(
+          'text-gray-700 leading-relaxed text-sm space-y-1',
+          user?.isAdmin && 'cursor-pointer rounded-md hover:bg-amber-50/70'
+        )}
+        onClick={() => user?.isAdmin && editText(contentKey, contentText, `${section.id} content`)}
+      >
+        {renderMarkdown(contentText)}
       </div>
     </div>
   );
 }
+

@@ -2,6 +2,7 @@
 
 import { cn } from '@/lib/utils';
 import { CheckSquare, Square, ListChecks } from 'lucide-react';
+import { EditableText } from '@/components/EditableText';
 
 type ChecklistItem = {
   key: string;
@@ -25,14 +26,19 @@ export function ChecklistBlock({ title, description, items, checkedItems, onTogg
     <div className="border border-teal-200 rounded-xl p-5 bg-teal-50">
       <div className="flex items-center gap-2 mb-1">
         <ListChecks className="w-5 h-5 text-teal-600" />
-        <h3 className="text-base font-semibold text-teal-900">{title}</h3>
+        <h3 className="text-base font-semibold text-teal-900">
+          <EditableText editKey={`checklist.title.${title}`} text={title} label="Checklist title" />
+        </h3>
         <span className="ml-auto text-sm text-teal-600 font-medium">
           {checkedCount}/{items.length}
         </span>
       </div>
-      {description && <p className="text-sm text-teal-700 mb-4">{description}</p>}
+      {description && (
+        <p className="text-sm text-teal-700 mb-4">
+          <EditableText editKey={`checklist.description.${title}`} text={description} label="Checklist description" />
+        </p>
+      )}
 
-      {/* Progress bar */}
       <div className="h-1.5 bg-teal-200 rounded-full mb-4 overflow-hidden">
         <div
           className="h-full bg-teal-500 rounded-full transition-all"
@@ -62,10 +68,16 @@ export function ChecklistBlock({ title, description, items, checkedItems, onTogg
               </span>
               <div>
                 <p className={cn('text-sm font-medium', isChecked ? 'line-through text-gray-400' : 'text-gray-800')}>
-                  {item.label}
+                  <EditableText editKey={`checklist.item.${item.key}.label`} text={item.label} label={`Checklist item ${item.key} label`} />
                 </p>
                 {item.description && (
-                  <p className="text-xs text-gray-500 mt-0.5">{item.description}</p>
+                  <p className="text-xs text-gray-500 mt-0.5">
+                    <EditableText
+                      editKey={`checklist.item.${item.key}.description`}
+                      text={item.description}
+                      label={`Checklist item ${item.key} description`}
+                    />
+                  </p>
                 )}
               </div>
             </button>
@@ -75,9 +87,10 @@ export function ChecklistBlock({ title, description, items, checkedItems, onTogg
 
       {allChecked && (
         <div className="mt-4 p-3 bg-teal-100 rounded-lg text-sm text-teal-800 text-center font-medium">
-          ✓ All practice items complete!
+          <EditableText editKey="checklist.completeMessage" text="All practice items complete!" label="Checklist complete message" />
         </div>
       )}
     </div>
   );
 }
+
