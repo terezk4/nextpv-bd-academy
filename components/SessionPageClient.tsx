@@ -159,13 +159,16 @@ export function SessionPageClient({ sessionId }: Props) {
     <div className="space-y-6">
       {/* Back nav */}
       <div className="flex items-center gap-3">
-        <button
-          type="button"
-          onClick={() => router.push('/')}
+        <a
+          href="/"
+          onClick={(e) => {
+            e.preventDefault();
+            window.location.assign('/');
+          }}
           className="inline-flex items-center gap-1.5 rounded-md px-1.5 py-1 text-sm text-gray-500 hover:bg-slate-100 hover:text-blue-600 transition-colors cursor-pointer"
         >
           <ArrowLeft className="w-4 h-4" /> All Sessions
-        </button>
+        </a>
         <span className="text-gray-300">/</span>
         <span className="text-sm text-gray-900 font-medium">Session {sessionId}</span>
       </div>
